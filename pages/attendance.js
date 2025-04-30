@@ -126,7 +126,8 @@ export default function AttendancePage() {
     studentHistory: false,
     confirmDelete: false,
     confirmReset: false,
-    deleteTarget: null
+    deleteTarget: null,
+    datesHistory: false
   });
 
   // Data states
@@ -158,6 +159,13 @@ export default function AttendancePage() {
 
   // Add this to the state declarations at the top of the component
   const [error, setError] = useState('');
+
+  // Add new state for attendance dates history
+  const [attendanceDatesHistory, setAttendanceDatesHistory] = useState({
+    loading: false,
+    dates: [],
+    error: null
+  });
 
   // Toast notification system
   const showToast = useCallback((type, message, autoClose = true) => {
@@ -216,30 +224,38 @@ export default function AttendancePage() {
       if (!res.ok) throw new Error('Failed to fetch attendance');
       const data = await res.json();
       
-      // Update attendance state
+      // Initialize all students as absent first
       const newAttendance = {};
+      students.forEach(student => {
+        newAttendance[student._id] = false;
+      });
+      
+      // Update with actual attendance data
       data.attendances.forEach(rec => {
         if (rec.student?._id) {
           newAttendance[rec.student._id] = rec.attended;
         }
       });
-      setAttendance(prev => ({ ...prev, ...newAttendance }));
+      
+      setAttendance(newAttendance);
       
       // Calculate stats
-      const presentCount = data.attendances.filter(r => r.attended).length;
-      const absentCount = data.attendances.length - presentCount;
-      const percentage = data.attendances.length > 0 
-        ? Math.round((presentCount / data.attendances.length) * 100) 
-        : 0;
+      const presentCount = Object.values(newAttendance).filter(Boolean).length;
+      const totalCount = students.length;
+      const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
       
-      setDailyStats({ present: presentCount, absent: absentCount, percentage });
+      setDailyStats({
+        present: presentCount,
+        absent: totalCount - presentCount,
+        percentage
+      });
     } catch (err) {
       console.error('Error fetching attendance:', err);
       showToast('error', 'Failed to load attendance data');
     } finally {
       setLoadingStates(prev => ({ ...prev, attendance: false }));
     }
-  }, [showToast]);
+  }, [students, showToast]);
 
   // Fetch overall attendance stats
   const fetchOverallAttendance = useCallback(async () => {
@@ -301,34 +317,73 @@ export default function AttendancePage() {
   }, []);
 
   // Toggle attendance for a student
-  const handleToggleAttendance = (studentId) => {
-    setAttendance(prev => ({ ...prev, [studentId]: !prev[studentId] }));
-  };
+  const handleToggleAttendance = useCallback((studentId) => {
+    setAttendance(prev => {
+      const newAttendance = { ...prev };
+      newAttendance[studentId] = !prev[studentId];
+      
+      // Update daily stats
+      const presentCount = Object.values(newAttendance).filter(Boolean).length;
+      const totalCount = students.length;
+      const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+      
+      setDailyStats({
+        present: presentCount,
+        absent: totalCount - presentCount,
+        percentage
+      });
+      
+      return newAttendance;
+    });
+  }, [students.length]);
 
   // Bulk attendance actions
-  const handleBulkAction = (action) => {
-    const newAttendance = { ...attendance };
-    uiStates.selectedStudents.forEach(student => {
-      switch (action) {
-        case 'markPresent': newAttendance[student._id] = true; break;
-        case 'markAbsent': newAttendance[student._id] = false; break;
-        case 'toggle': newAttendance[student._id] = !newAttendance[student._id]; break;
-        default: break;
-      }
+  const handleBulkAction = useCallback((action) => {
+    setAttendance(prev => {
+      const newAttendance = { ...prev };
+      uiStates.selectedStudents.forEach(student => {
+        switch (action) {
+          case 'markPresent':
+            newAttendance[student._id] = true;
+            break;
+          case 'markAbsent':
+            newAttendance[student._id] = false;
+            break;
+          case 'toggle':
+            newAttendance[student._id] = !prev[student._id];
+            break;
+          default:
+            break;
+        }
+      });
+      
+      // Update daily stats
+      const presentCount = Object.values(newAttendance).filter(Boolean).length;
+      const totalCount = students.length;
+      const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+      
+      setDailyStats({
+        present: presentCount,
+        absent: totalCount - presentCount,
+        percentage
+      });
+      
+      return newAttendance;
     });
-    setAttendance(newAttendance);
+    
     setUiStates(prev => ({ ...prev, selectedStudents: [] }));
     showToast('success', `Updated ${uiStates.selectedStudents.length} students`);
-  };
+  }, [uiStates.selectedStudents, students.length, showToast]);
 
   // Submit attendance to server
   const submitAttendance = useCallback(async () => {
     setLoadingStates(prev => ({ ...prev, submitting: true }));
     try {
-      const updates = Object.entries(attendance).map(([studentId, attended]) => ({
-        student: studentId,
+      // Prepare updates array with all students
+      const updates = students.map(student => ({
+        student: student._id,
         assemblyDate,
-        attended
+        attended: attendance[student._id] || false
       }));
       
       const res = await fetch('/api/attendance', {
@@ -348,7 +403,7 @@ export default function AttendancePage() {
     } finally {
       setLoadingStates(prev => ({ ...prev, submitting: false }));
     }
-  }, [attendance, assemblyDate, fetchAttendanceData, fetchOverallAttendance]);
+  }, [attendance, assemblyDate, students, fetchAttendanceData, fetchOverallAttendance, showToast]);
 
   // Delete attendance functions
   const confirmDelete = (type, id = null, date = null) => {
@@ -405,6 +460,25 @@ export default function AttendancePage() {
       const student = students.find(s => s._id === result);
       if (!student) throw new Error('Student not found');
       
+      // Update local state first
+      setAttendance(prev => {
+        const newAttendance = { ...prev, [student._id]: true };
+        
+        // Update daily stats
+        const presentCount = Object.values(newAttendance).filter(Boolean).length;
+        const totalCount = students.length;
+        const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+        
+        setDailyStats({
+          present: presentCount,
+          absent: totalCount - presentCount,
+          percentage
+        });
+        
+        return newAttendance;
+      });
+      
+      // Then update server
       const res = await fetch('/api/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -417,14 +491,12 @@ export default function AttendancePage() {
       
       if (!res.ok) throw new Error('Failed to mark attendance');
       
-      setAttendance(prev => ({ ...prev, [student._id]: true }));
       setQrScanData(prev => ({
         ...prev,
         success: `${student.first_name} ${student.last_name} marked present`
       }));
       
       showToast('success', 'Attendance marked via QR');
-      fetchAttendanceData(assemblyDate);
     } catch (err) {
       console.error("QR Attendance Error:", err);
       showToast('error', 'QR scan failed');
@@ -433,7 +505,7 @@ export default function AttendancePage() {
         setQrScanData(prev => ({ ...prev, scanning: false }));
       }, 2000);
     }
-  }, [assemblyDate, fetchAttendanceData, students, qrScanData.scanning]);
+  }, [assemblyDate, students, qrScanData.scanning, showToast]);
 
   // Add this new function before the viewHistory function
   const calculateAttendanceStats = (records) => {
@@ -504,6 +576,38 @@ export default function AttendancePage() {
     }
   }, [students, attendance, overallAttendance, assemblyDate]);
 
+  // Add function to fetch attendance dates history
+  const fetchAttendanceDatesHistory = useCallback(async () => {
+    setAttendanceDatesHistory(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const res = await fetch('/api/attendance/dates');
+      if (!res.ok) throw new Error('Failed to fetch attendance dates');
+      const data = await res.json();
+      
+      // Sort dates in descending order
+      const sortedDates = data.dates.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setAttendanceDatesHistory(prev => ({ 
+        ...prev, 
+        dates: sortedDates,
+        loading: false 
+      }));
+    } catch (err) {
+      console.error('Error fetching attendance dates:', err);
+      setAttendanceDatesHistory(prev => ({ 
+        ...prev, 
+        error: 'Failed to load attendance dates',
+        loading: false 
+      }));
+    }
+  }, []);
+
+  // Add useEffect to fetch dates when modal opens
+  useEffect(() => {
+    if (modalStates.datesHistory) {
+      fetchAttendanceDatesHistory();
+    }
+  }, [modalStates.datesHistory, fetchAttendanceDatesHistory]);
+
   // Responsive columns configuration
   const columns = useMemo(() => [
     {
@@ -537,7 +641,7 @@ export default function AttendancePage() {
         const percentage = overallAttendance[row._id];
         return (
           <div className="d-flex align-items-center">
-            <div className="d-none d-md-block">
+            <div>
               <Form.Switch
                 id={`attendance-switch-${row._id}`}
                 checked={attendance[row._id] || false}
@@ -560,7 +664,7 @@ export default function AttendancePage() {
                   {attendance[row._id] ? 'Present' : 'Absent'}
                 </small>
               </div>
-              <ProgressBar className="mt-1" style={{ height: '4px' }}>
+              <ProgressBar className="mt-1 d-none d-md-block" style={{ height: '4px' }}>
                 <ProgressBar 
                   variant={
                     percentage >= HIGH_ATTENDANCE_THRESHOLD ? 'success' :
@@ -573,7 +677,7 @@ export default function AttendancePage() {
           </div>
         );
       },
-      minWidth: '200px'
+      minWidth: '150px'
     },
     {
       name: 'Actions',
@@ -738,6 +842,16 @@ export default function AttendancePage() {
                 size="sm"
               >
                 <FaQrcode className="me-1" /> <span className="d-none d-md-inline">QR Scanner</span>
+              </Button>
+              <Button 
+                variant="light"
+                className="me-2 d-flex align-items-center"
+                onClick={() => setModalStates(prev => ({ ...prev, datesHistory: true }))}
+                size="sm"
+              >
+                <FaHistory className="me-1" /> 
+                <span className="d-none d-md-inline">Dates History</span>
+                <span className="d-md-none">History</span>
               </Button>
               <Dropdown>
                 <Dropdown.Toggle variant="light" className="d-flex align-items-center" size="sm">
@@ -1323,8 +1437,7 @@ export default function AttendancePage() {
                     <Table striped bordered hover responsive>
                       <thead>
                         <tr>
-                          <th>Date</th>
-                          <th>Day</th>
+                          <th>Student Name</th>
                           <th>Status</th>
                         </tr>
                       </thead>
@@ -1335,9 +1448,6 @@ export default function AttendancePage() {
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric'
-                            })}</td>
-                            <td>{new Date(record.assemblyDate).toLocaleDateString('en-US', {
-                              weekday: 'long'
                             })}</td>
                             <td>
                               <div className={styles.badgeWrapper}>
@@ -1360,6 +1470,113 @@ export default function AttendancePage() {
             </Modal.Body>
           </Modal>
         </div>
+
+        {/* Attendance Dates History Modal */}
+        <Modal
+          show={modalStates.datesHistory}
+          onHide={() => setModalStates(prev => ({ ...prev, datesHistory: false }))}
+          size="xl"
+          scrollable
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Attendance History by Date</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {attendanceDatesHistory.loading ? (
+              <div className="text-center py-4">
+                <Spinner animation="border" variant="primary" />
+              </div>
+            ) : attendanceDatesHistory.error ? (
+              <Alert variant="danger">
+                <FaExclamationTriangle className="me-2" />
+                {attendanceDatesHistory.error}
+              </Alert>
+            ) : (
+              <div>
+                {attendanceDatesHistory.dates.map(dateData => (
+                  <Card key={dateData.date} className="mb-3">
+                    <Card.Header>
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <h5 className="mb-0">{format(parseISO(dateData.date), 'MMMM d, yyyy')}</h5>
+                          <small className="text-muted">{format(parseISO(dateData.date), 'EEEE')}</small>
+                        </div>
+                        <div className="d-flex align-items-center">
+                          <div className="text-end me-3">
+                            <div>
+                              <Badge bg="success" className="me-1">Present: {dateData.presentCount}</Badge>
+                              <Badge bg="danger" className="me-1">Absent: {dateData.absentCount}</Badge>
+                              <Badge 
+                                bg={
+                                  (dateData.presentCount / dateData.totalCount * 100) >= HIGH_ATTENDANCE_THRESHOLD ? 'success' :
+                                  (dateData.presentCount / dateData.totalCount * 100) >= LOW_ATTENDANCE_THRESHOLD ? 'warning' : 'danger'
+                                }
+                              >
+                                {Math.round(dateData.presentCount / dateData.totalCount * 100)}%
+                              </Badge>
+                            </div>
+                            <small className="text-muted">Total: {dateData.totalCount} students</small>
+                          </div>
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            onClick={() => {
+                              setAssemblyDate(dateData.date);
+                              setModalStates(prev => ({ ...prev, datesHistory: false }));
+                            }}
+                          >
+                            View Full Day
+                          </Button>
+                        </div>
+                      </div>
+                    </Card.Header>
+                    <Card.Body className="p-0">
+                      <div className="table-responsive">
+                        <Table hover className="mb-0">
+                          <thead>
+                            <tr>
+                              <th>Student Name</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dateData.students
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map(student => (
+                                <tr key={student.id}>
+                                  <td>{student.name}</td>
+                                  <td>
+                                    <Badge 
+                                      bg={student.attended ? 'success' : 'danger'}
+                                      className="d-inline-flex align-items-center"
+                                    >
+                                      {student.attended ? (
+                                        <><FaCheckCircle className="me-1" /> Present</>
+                                      ) : (
+                                        <><FaTimesCircle className="me-1" /> Absent</>
+                                      )}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                            ))}
+                          </tbody>
+                        </Table>
+                      </div>
+                    </Card.Body>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button 
+              variant="secondary" 
+              onClick={() => setModalStates(prev => ({ ...prev, datesHistory: false }))}
+            >
+              Close
+            </Button>
+          </Modal.Footer>
+        </Modal>
       </Container>
     </div>
   );

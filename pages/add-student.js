@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Form, Button, Toast, Alert } from 'react-bootstrap';
+import { Form, Button, Toast, Alert, Card, Badge, Row, Col, InputGroup } from 'react-bootstrap';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { FaPlus, FaTimes, FaSave, FaUndo } from 'react-icons/fa';
 import Navbar from '../components/Navbar';
 
 export default function AddStudent() {
@@ -11,6 +12,8 @@ export default function AddStudent() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastVariant, setToastVariant] = useState('success');
   const [error, setError] = useState('');
+  
+  // Enhanced form data with events array
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -21,8 +24,48 @@ export default function AddStudent() {
     gender: '',
     education: '',
     emergency_contact: '',
-    notes: ''
+    notes: '',
+    events: [] // Array to store multiple events
   });
+
+  // Event types for dropdown
+  const eventTypes = [
+    'Yuva Mahotsav',
+    'Atmiya Youth Shibir',
+    'Box Cricket',
+    'Atmiya Cricket Tournament',
+    'Seva Day',
+    'Youth Camp',
+    'Cultural Program',
+    'Sports Event',
+    'Other'
+  ];
+
+  // Add a new event entry
+  const addEvent = () => {
+    setFormData(prev => ({
+      ...prev,
+      events: [...prev.events, { type: '', year: '', role: '', notes: '' }]
+    }));
+  };
+
+  // Remove an event entry
+  const removeEvent = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      events: prev.events.filter((_, i) => i !== index)
+    }));
+  };
+
+  // Update event data
+  const updateEvent = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      events: prev.events.map((event, i) => 
+        i === index ? { ...event, [field]: value } : event
+      )
+    }));
+  };
 
   // Utility to display toast messages
   const showToastMessage = (message, variant = 'success') => {
@@ -42,9 +85,8 @@ export default function AddStudent() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Prevent multiple submissions
     if (loading) return;
-    console.log('Form submission triggered');
+    
     setLoading(true);
     setError('');
     setShowToast(false);
@@ -61,10 +103,17 @@ export default function AddStudent() {
       gender: formData.gender || '',
       education: formData.education || '',
       emergency_contact: formData.emergency_contact?.trim() || '',
-      notes: formData.notes?.trim() || ''
+      notes: formData.notes?.trim() || '',
+      events: formData.events.map(event => ({
+        ...event,
+        type: event.type.trim(),
+        year: event.year.trim(),
+        role: event.role?.trim() || '',
+        notes: event.notes?.trim() || ''
+      }))
     };
 
-    // Validate required fields (here we require first name, last name, and phone)
+    // Validate required fields
     if (!cleanedFormData.first_name || !cleanedFormData.last_name || !cleanedFormData.phone) {
       const errorMsg = 'Please fill in all required fields (First name, Last name, Phone)';
       setError(errorMsg);
@@ -74,12 +123,12 @@ export default function AddStudent() {
     }
 
     try {
-      // Send POST request to create a new student
       const response = await fetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify(cleanedFormData)
       });
+      
       const textResponse = await response.text();
       let data = {};
       if (textResponse) {
@@ -89,11 +138,13 @@ export default function AddStudent() {
           throw new Error('Failed to parse server response');
         }
       }
+      
       if (!response.ok) {
         throw new Error(data.error || 'Failed to add student');
       }
-      console.log('Student added successfully:', data);
+      
       showToastMessage('Student added successfully!');
+      
       // Clear the form
       setFormData({
         first_name: '',
@@ -105,8 +156,10 @@ export default function AddStudent() {
         gender: '',
         education: '',
         emergency_contact: '',
-        notes: ''
+        notes: '',
+        events: []
       });
+      
       // Redirect to Students table after a short delay
       setTimeout(() => {
         router.push('/students-table');
@@ -121,6 +174,24 @@ export default function AddStudent() {
     }
   };
 
+  // Reset form
+  const resetForm = () => {
+    setFormData({
+      first_name: '',
+      last_name: '',
+      mail_id: '',
+      phone: '',
+      address: '',
+      date_of_birth: '',
+      gender: '',
+      education: '',
+      emergency_contact: '',
+      notes: '',
+      events: []
+    });
+    setError('');
+  };
+
   return (
     <>
       <Head>
@@ -130,199 +201,301 @@ export default function AddStudent() {
       <Navbar />
 
       <div className="container-fluid py-4">
-        <div className="row justify-content-center">
-          <div className="col-lg-8">
-            <div className="card">
-              <div className="card-header">
+        <Row className="justify-content-center">
+          <Col lg={10}>
+            <Card className="shadow-sm">
+              <Card.Header className="bg-primary text-white">
                 <h4 className="mb-0">Add New Student</h4>
-              </div>
-              <div className="card-body">
+              </Card.Header>
+              
+              <Card.Body>
                 {error && (
                   <Alert variant="danger" className="mb-4" onClose={() => setError('')} dismissible>
                     {error}
                   </Alert>
                 )}
+                
                 <Form onSubmit={handleSubmit} onKeyDown={handleKeyDown} noValidate>
-                  <div className="row">
-                    <div className="col-md-6">
+                  {/* Personal Information Section */}
+                  <Card className="mb-4">
+                    <Card.Header className="bg-light">
+                      <h5 className="mb-0">Personal Information</h5>
+                    </Card.Header>
+                    <Card.Body>
+                      <Row>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>
+                              First Name <span className="text-danger">*</span>
+                            </Form.Label>
+                            <Form.Control
+                              type="text"
+                              value={formData.first_name}
+                              onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                              required
+                              placeholder="Enter first name"
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>
+                              Last Name <span className="text-danger">*</span>
+                            </Form.Label>
+                            <Form.Control
+                              type="text"
+                              value={formData.last_name}
+                              onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                              required
+                              placeholder="Enter last name"
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+
+                      <Row>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>Email</Form.Label>
+                            <Form.Control
+                              type="email"
+                              value={formData.mail_id}
+                              onChange={(e) => setFormData({ ...formData, mail_id: e.target.value })}
+                              placeholder="Enter email address"
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>
+                              Phone <span className="text-danger">*</span>
+                            </Form.Label>
+                            <Form.Control
+                              type="tel"
+                              value={formData.phone}
+                              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                              required
+                              placeholder="Enter phone number"
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+
                       <Form.Group className="mb-3">
-                        <Form.Label>
-                          First Name <span className="text-danger">*</span>
-                        </Form.Label>
+                        <Form.Label>Address</Form.Label>
                         <Form.Control
                           type="text"
-                          value={formData.first_name}
-                          onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                          required
-                          placeholder="Enter first name"
+                          value={formData.address}
+                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                          placeholder="Enter address"
                         />
                       </Form.Group>
-                    </div>
-                    <div className="col-md-6">
-                      <Form.Group className="mb-3">
-                        <Form.Label>
-                          Last Name <span className="text-danger">*</span>
-                        </Form.Label>
-                        <Form.Control
-                          type="text"
-                          value={formData.last_name}
-                          onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                          required
-                          placeholder="Enter last name"
-                        />
-                      </Form.Group>
-                    </div>
-                  </div>
 
-                  <div className="row">
-                    <div className="col-md-6">
-                      <Form.Group className="mb-3">
-                        <Form.Label>Email (Optional)</Form.Label>
-                        <Form.Control
-                          type="email"
-                          value={formData.mail_id}
-                          onChange={(e) => setFormData({ ...formData, mail_id: e.target.value })}
-                          placeholder="Enter email address"
-                        />
-                      </Form.Group>
-                    </div>
-                    <div className="col-md-6">
-                      <Form.Group className="mb-3">
-                        <Form.Label>
-                          Phone <span className="text-danger">*</span>
-                        </Form.Label>
-                        <Form.Control
-                          type="tel"
-                          value={formData.phone}
-                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          required
-                          placeholder="Enter phone number"
-                        />
-                      </Form.Group>
-                    </div>
-                  </div>
+                      <Row>
+                        <Col md={4}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>Date of Birth</Form.Label>
+                            <Form.Control
+                              type="date"
+                              value={formData.date_of_birth}
+                              onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={4}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>Gender</Form.Label>
+                            <Form.Select
+                              value={formData.gender}
+                              onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                            >
+                              <option value="">Select Gender</option>
+                              <option value="male">Male</option>
+                              <option value="female">Female</option>
+                              <option value="other">Other</option>
+                            </Form.Select>
+                          </Form.Group>
+                        </Col>
+                        <Col md={4}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>Education</Form.Label>
+                            <Form.Select
+                              value={formData.education}
+                              onChange={(e) => setFormData({ ...formData, education: e.target.value })}
+                            >
+                              <option value="">Select Education</option>
+                              <option value="high_school">High School</option>
+                              <option value="undergraduate">Undergraduate</option>
+                              <option value="graduate">Graduate</option>
+                              <option value="post_graduate">Post Graduate</option>
+                              <option value="other">Other</option>
+                            </Form.Select>
+                          </Form.Group>
+                        </Col>
+                      </Row>
 
-                  <Form.Group className="mb-3">
-                    <Form.Label>Address</Form.Label>
-                    <Form.Control
-                      type="text"
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      placeholder="Enter address"
-                    />
-                  </Form.Group>
+                      <Row>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>Emergency Contact</Form.Label>
+                            <Form.Control
+                              type="tel"
+                              value={formData.emergency_contact}
+                              onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
+                              placeholder="Emergency contact number"
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>Notes</Form.Label>
+                            <Form.Control
+                              as="textarea"
+                              rows={2}
+                              value={formData.notes}
+                              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                              placeholder="Any additional notes"
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+                    </Card.Body>
+                  </Card>
 
-                  <div className="row">
-                    <div className="col-md-6">
-                      <Form.Group className="mb-3">
-                        <Form.Label>Date of Birth</Form.Label>
-                        <Form.Control
-                          type="date"
-                          value={formData.date_of_birth}
-                          onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
-                        />
-                      </Form.Group>
-                    </div>
-                    <div className="col-md-6">
-                      <Form.Group className="mb-3">
-                        <Form.Label>Gender</Form.Label>
-                        <Form.Select
-                          value={formData.gender}
-                          onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                        >
-                          <option value="">Select Gender</option>
-                          <option value="male">Male</option>
-                          <option value="female">Female</option>
-                          <option value="other">Other</option>
-                        </Form.Select>
-                      </Form.Group>
-                    </div>
-                  </div>
-
-                  <div className="row">
-                    <div className="col-md-6">
-                      <Form.Group className="mb-3">
-                        <Form.Label>Education</Form.Label>
-                        <Form.Select
-                          value={formData.education}
-                          onChange={(e) => setFormData({ ...formData, education: e.target.value })}
-                        >
-                          <option value="">Select Education</option>
-                          <option value="high_school">High School</option>
-                          <option value="bachelors">Bachelors</option>
-                          <option value="masters">Masters</option>
-                          <option value="phd">PhD</option>
-                          <option value="other">Other</option>
-                        </Form.Select>
-                      </Form.Group>
-                    </div>
-                    <div className="col-md-6">
-                      <Form.Group className="mb-3">
-                        <Form.Label>Emergency Contact</Form.Label>
-                        <Form.Control
-                          type="tel"
-                          value={formData.emergency_contact}
-                          onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
-                          placeholder="Enter emergency contact"
-                        />
-                      </Form.Group>
-                    </div>
-                  </div>
-
-                  <Form.Group className="mb-3">
-                    <Form.Label>Notes</Form.Label>
-                    <Form.Control
-                      as="textarea"
-                      rows={3}
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder="Enter any additional notes"
-                    />
-                  </Form.Group>
-
-                  <div className="d-flex justify-content-end gap-2">
-                    <Button variant="secondary" onClick={() => router.push('/students-table')}>
-                      Cancel
-                    </Button>
-                    <Button variant="primary" type="submit" disabled={loading}>
-                      {loading ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                          Adding Student...
-                        </>
+                  {/* Events Section */}
+                  <Card className="mb-4">
+                    <Card.Header className="bg-light d-flex justify-content-between align-items-center">
+                      <h5 className="mb-0">Events & Participation</h5>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={addEvent}
+                        className="d-flex align-items-center"
+                      >
+                        <FaPlus className="me-1" /> Add Event
+                      </Button>
+                    </Card.Header>
+                    <Card.Body>
+                      {formData.events.length === 0 ? (
+                        <Alert variant="info">
+                          No events added yet. Click the "Add Event" button to add participation details.
+                        </Alert>
                       ) : (
-                        'Add Student'
+                        formData.events.map((event, index) => (
+                          <Card key={index} className="mb-3 border">
+                            <Card.Body>
+                              <div className="d-flex justify-content-between align-items-start mb-3">
+                                <h6 className="mb-0">Event #{index + 1}</h6>
+                                <Button
+                                  variant="outline-danger"
+                                  size="sm"
+                                  onClick={() => removeEvent(index)}
+                                  className="d-flex align-items-center"
+                                >
+                                  <FaTimes className="me-1" /> Remove
+                                </Button>
+                              </div>
+                              
+                              <Row>
+                                <Col md={6}>
+                                  <Form.Group className="mb-3">
+                                    <Form.Label>Event Type</Form.Label>
+                                    <Form.Select
+                                      value={event.type}
+                                      onChange={(e) => updateEvent(index, 'type', e.target.value)}
+                                    >
+                                      <option value="">Select Event</option>
+                                      {eventTypes.map((type) => (
+                                        <option key={type} value={type}>{type}</option>
+                                      ))}
+                                    </Form.Select>
+                                  </Form.Group>
+                                </Col>
+                                <Col md={6}>
+                                  <Form.Group className="mb-3">
+                                    <Form.Label>Year</Form.Label>
+                                    <Form.Control
+                                      type="text"
+                                      value={event.year}
+                                      onChange={(e) => updateEvent(index, 'year', e.target.value)}
+                                      placeholder="Enter year(s) of participation"
+                                    />
+                                  </Form.Group>
+                                </Col>
+                              </Row>
+
+                              <Row>
+                                <Col md={6}>
+                                  <Form.Group className="mb-3">
+                                    <Form.Label>Role/Position</Form.Label>
+                                    <Form.Control
+                                      type="text"
+                                      value={event.role}
+                                      onChange={(e) => updateEvent(index, 'role', e.target.value)}
+                                      placeholder="E.g., Participant, Volunteer, Organizer"
+                                    />
+                                  </Form.Group>
+                                </Col>
+                                <Col md={6}>
+                                  <Form.Group className="mb-3">
+                                    <Form.Label>Event Notes</Form.Label>
+                                    <Form.Control
+                                      as="textarea"
+                                      rows={1}
+                                      value={event.notes}
+                                      onChange={(e) => updateEvent(index, 'notes', e.target.value)}
+                                      placeholder="Any specific details about participation"
+                                    />
+                                  </Form.Group>
+                                </Col>
+                              </Row>
+                            </Card.Body>
+                          </Card>
+                        ))
                       )}
+                    </Card.Body>
+                  </Card>
+
+                  {/* Form Actions */}
+                  <div className="d-flex justify-content-between">
+                    <Button
+                      variant="outline-secondary"
+                      onClick={resetForm}
+                      className="d-flex align-items-center"
+                      disabled={loading}
+                    >
+                      <FaUndo className="me-2" /> Reset Form
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      className="d-flex align-items-center"
+                      disabled={loading}
+                    >
+                      <FaSave className="me-2" />
+                      {loading ? 'Saving...' : 'Save Student'}
                     </Button>
                   </div>
                 </Form>
-              </div>
-            </div>
-          </div>
-        </div>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
       </div>
 
       {/* Toast Notification */}
-      <div className="position-fixed bottom-0 end-0 p-3" style={{ zIndex: 1051 }}>
-        <Toast show={showToast} onClose={() => setShowToast(false)} bg={toastVariant === 'success' ? 'success' : 'danger'} delay={3000} autohide>
-          <Toast.Header closeButton className={toastVariant === 'success' ? 'bg-success text-white' : 'bg-danger text-white'}>
-            <strong className="me-auto">{toastVariant === 'success' ? 'Success' : 'Error'}</strong>
+      <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 1000 }}>
+        <Toast show={showToast} onClose={() => setShowToast(false)} bg={toastVariant} delay={3000} autohide>
+          <Toast.Header closeButton={false}>
+            <strong className="me-auto">
+              {toastVariant === 'success' ? 'Success' : 'Error'}
+            </strong>
           </Toast.Header>
-          <Toast.Body className={`fw-semibold ${toastVariant === 'success' ? 'text-success' : 'text-danger'}`}>
+          <Toast.Body className={toastVariant === 'success' ? 'text-white' : ''}>
             {toastMessage}
           </Toast.Body>
         </Toast>
       </div>
-
-      <style jsx>{`
-        .card { border: none; border-radius: 0.5rem; box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15); }
-        .card-header { background-color: #f8f9fc; border-bottom: 1px solid #e3e6f0; padding: 1.25rem; }
-        .form-control:focus, .form-select:focus {
-          border-color: #4e73df;
-          box-shadow: 0 0 0 0.25rem rgba(78, 115, 223, 0.25);
-        }
-        .form-control::placeholder { color: #a8aeb8; }
-      `}</style>
     </>
   );
 }
