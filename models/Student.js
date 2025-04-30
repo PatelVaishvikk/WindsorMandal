@@ -127,32 +127,32 @@ const StudentSchema = new mongoose.Schema({
     default: false 
   },
   box_cricket_years: { 
-    type: String, 
-    default: '' 
+    type: [String],
+    default: []
   },
   atmiya_cricket_tournament: { 
     type: Boolean, 
     default: false 
   },
   atmiya_cricket_years: { 
-    type: String, 
-    default: '' 
+    type: [String],
+    default: []
   },
   atmiya_youth_shibir: { 
     type: Boolean, 
     default: false 
   },
   atmiya_youth_years: { 
-    type: String, 
-    default: '' 
+    type: [String],
+    default: []
   },
   yuva_mahotsav: { 
     type: Boolean, 
     default: false 
   },
   yuva_mahotsav_years: { 
-    type: String, 
-    default: '' 
+    type: [String],
+    default: []
   },
   harimay: { 
     type: Boolean, 

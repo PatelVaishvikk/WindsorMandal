@@ -145,6 +145,14 @@ import connectDb from '../../lib/db';
 import Student from '../../models/Student';
 import CallLog from '../../models/CallLog';
 
+// Add this helper function at the top after the imports
+const formatDate = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  // Create date in UTC without time component to avoid timezone issues
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+};
+
 export default async function handler(req, res) {
   await connectDb();
   const { method } = req;
@@ -177,7 +185,9 @@ export default async function handler(req, res) {
         const students = studentsList.map(student => ({
           ...student,
           _id: student._id.toString(),
-          ...(student.date_of_birth ? { date_of_birth: new Date(student.date_of_birth).toISOString() } : {})
+          ...(student.date_of_birth ? { 
+            date_of_birth: new Date(student.date_of_birth).toISOString().split('T')[0]
+          } : {})
         }));
         res.status(200).json({ students, total, currentPage: pageNum });
       } catch (err) {
@@ -229,7 +239,6 @@ export default async function handler(req, res) {
         if (!student) {
           return res.status(404).json({ error: 'Student not found' });
         }
-        // Updated list of fields (remove 'gender' and 'interests' if not used anymore)
         const fields = [
           'first_name',
           'last_name',
@@ -250,12 +259,13 @@ export default async function handler(req, res) {
           'yuva_mahotsav_years',
           'harimay'
         ];
+        
         for (const field of fields) {
           if (req.body.hasOwnProperty(field)) {
             if (field === 'mail_id') {
               student.mail_id = req.body.mail_id ? req.body.mail_id.trim().toLowerCase() : '';
             } else if (field === 'date_of_birth') {
-              student.date_of_birth = req.body.date_of_birth ? new Date(req.body.date_of_birth) : null;
+              student.date_of_birth = req.body.date_of_birth ? formatDate(req.body.date_of_birth) : null;
             } else {
               student[field] = req.body[field];
             }
@@ -264,6 +274,9 @@ export default async function handler(req, res) {
         await student.save();
         const updatedStudent = student.toObject();
         updatedStudent._id = updatedStudent._id.toString();
+        if (updatedStudent.date_of_birth) {
+          updatedStudent.date_of_birth = new Date(updatedStudent.date_of_birth).toISOString().split('T')[0];
+        }
         res.status(200).json({ student: updatedStudent });
       } catch (err) {
         console.error('Error updating student:', err);

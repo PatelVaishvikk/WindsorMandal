@@ -6,6 +6,25 @@ export default async function handler(req, res) {
   await connectDb();
   const { method } = req;
 
+  // Helper function to create date range for Eastern Time Zone
+  const createDateRange = (dateStr) => {
+    // Parse the date string
+    const [year, month, day] = dateStr.split('-').map(num => parseInt(num, 10));
+    
+    // Create start and end dates for the exact day in UTC
+    const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+    const endDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    
+    return { start: startDate, end: endDate };
+  };
+
+  // Helper function to format date for response
+  const formatDateForResponse = (date) => {
+    if (!date) return null;
+    // Return the date in YYYY-MM-DD format
+    return date.toISOString().split('T')[0];
+  };
+
   switch (method) {
     case 'GET': {
       try {
@@ -13,17 +32,12 @@ export default async function handler(req, res) {
         const filter = {};
         
         if (assemblyDate) {
-          const start = new Date(assemblyDate);
-          start.setHours(0, 0, 0, 0);
-          const end = new Date(assemblyDate);
-          end.setHours(23, 59, 59, 999);
+          const { start, end } = createDateRange(assemblyDate);
           filter.assemblyDate = { $gte: start, $lte: end };
         } else if (startDate && endDate) {
-          const start = new Date(startDate);
-          start.setHours(0, 0, 0, 0);
-          const end = new Date(endDate);
-          end.setHours(23, 59, 59, 999);
-          filter.assemblyDate = { $gte: start, $lte: end };
+          const startRange = createDateRange(startDate);
+          const endRange = createDateRange(endDate);
+          filter.assemblyDate = { $gte: startRange.start, $lte: endRange.end };
         }
         
         if (studentId) {
@@ -38,10 +52,20 @@ export default async function handler(req, res) {
           .populate('student')
           .sort({ assemblyDate: -1 })
           .skip((pageNum - 1) * limitNum)
-          .limit(limitNum === 0 ? undefined : limitNum)  // Handle limit=0 case to return all records
+          .limit(limitNum === 0 ? undefined : limitNum)
           .lean();
 
-        res.status(200).json({ attendances, total, page: pageNum });
+        // Format dates in the response, adjusting for Eastern Time
+        const formattedAttendances = attendances.map(att => ({
+          ...att,
+          assemblyDate: formatDateForResponse(new Date(att.assemblyDate))
+        }));
+
+        res.status(200).json({ 
+          attendances: formattedAttendances, 
+          total, 
+          page: pageNum 
+        });
       } catch (err) {
         console.error('Error fetching attendance records:', err);
         res.status(500).json({ error: 'Failed to fetch attendance records' });
@@ -53,16 +77,19 @@ export default async function handler(req, res) {
       try {
         // Handle bulk attendance updates
         if (req.body.updates && Array.isArray(req.body.updates)) {
-          const bulkOps = req.body.updates.map(update => ({
-            updateOne: {
-              filter: {
-                student: update.student,
-                assemblyDate: new Date(update.assemblyDate)
-              },
-              update: { $set: { attended: update.attended } },
-              upsert: true
-            }
-          }));
+          const bulkOps = req.body.updates.map(update => {
+            const { start } = createDateRange(update.assemblyDate);
+            return {
+              updateOne: {
+                filter: {
+                  student: update.student,
+                  assemblyDate: start
+                },
+                update: { $set: { attended: update.attended } },
+                upsert: true
+              }
+            };
+          });
           
           const result = await Attendance.bulkWrite(bulkOps);
           return res.status(200).json({ success: true, result });
@@ -74,9 +101,10 @@ export default async function handler(req, res) {
           return res.status(400).json({ error: 'Missing required fields' });
         }
         
+        const { start } = createDateRange(assemblyDate);
         const newAttendance = new Attendance({
           student,
-          assemblyDate: new Date(assemblyDate),
+          assemblyDate: start,
           attended: attended === true
         });
         
@@ -96,9 +124,10 @@ export default async function handler(req, res) {
       }
       
       try {
-        const updateFields = req.body;
+        const updateFields = { ...req.body };
         if (updateFields.assemblyDate) {
-          updateFields.assemblyDate = new Date(updateFields.assemblyDate);
+          const { start } = createDateRange(updateFields.assemblyDate);
+          updateFields.assemblyDate = start;
         }
         
         const updated = await Attendance.findByIdAndUpdate(
@@ -134,12 +163,10 @@ export default async function handler(req, res) {
         
         // Delete all records for a specific student on a specific date
         if (studentId && date) {
+          const { start, end } = createDateRange(date);
           const result = await Attendance.deleteMany({
             student: studentId,
-            assemblyDate: {
-              $gte: new Date(new Date(date).setHours(0, 0, 0, 0)),
-              $lte: new Date(new Date(date).setHours(23, 59, 59, 999))
-            }
+            assemblyDate: { $gte: start, $lte: end }
           });
           
           return res.status(200).json({
@@ -150,11 +177,9 @@ export default async function handler(req, res) {
         
         // Delete all records for a specific date
         if (date) {
+          const { start, end } = createDateRange(date);
           const result = await Attendance.deleteMany({
-            assemblyDate: {
-              $gte: new Date(new Date(date).setHours(0, 0, 0, 0)),
-              $lte: new Date(new Date(date).setHours(23, 59, 59, 999))
-            }
+            assemblyDate: { $gte: start, $lte: end }
           });
           
           return res.status(200).json({

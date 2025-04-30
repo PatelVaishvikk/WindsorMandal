@@ -40,7 +40,8 @@ export default function CallLogs() {
     status: 'Completed',
     notes: '',
     needs_follow_up: false,
-    follow_up_date: ''
+    follow_up_date: '',
+    timestamp: ''
   });
 
   useEffect(() => {
@@ -126,7 +127,8 @@ export default function CallLogs() {
       status: 'Completed',
       notes: '',
       needs_follow_up: false,
-      follow_up_date: ''
+      follow_up_date: '',
+      timestamp: ''
     });
     setShowAddModal(true);
   };
@@ -381,6 +383,15 @@ export default function CallLogs() {
                 />
               </Form.Group>
             )}
+
+            <Form.Group className="mb-3">
+              <Form.Label>Call Date & Time</Form.Label>
+              <Form.Control
+                type="datetime-local"
+                value={callLog.timestamp ? new Date(callLog.timestamp).toISOString().slice(0,16) : ''}
+                onChange={e => setCallLog({ ...callLog, timestamp: e.target.value ? new Date(e.target.value).toISOString() : '' })}
+              />
+            </Form.Group>
           </Form>
         </Modal.Body>
         <Modal.Footer>

@@ -9,7 +9,7 @@ const CallLogSchema = new mongoose.Schema({
   status: {
     type: String,
     required: [true, 'Status is required'],
-    enum: ['Completed', 'No Answer', 'Left Message', 'Rescheduled'],
+    enum: ['Completed', 'No Answer', 'Left Message', 'Rescheduled', 'Dialed'],
     default: 'Completed'
   },
   notes: {

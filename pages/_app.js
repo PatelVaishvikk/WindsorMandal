@@ -5,7 +5,14 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import '../styles/globals.css';
 import DarkModeToggle from '@/components/DarkModeToggle';
 import Navigation from '../components/Navbar';
+import dynamic from 'next/dynamic';
 // import ChatWidget from '../components/ChatWidget'; // Import the Chat Widget
+
+// Dynamically import BirthdayReminder with no SSR
+const BirthdayReminder = dynamic(
+    () => import('../components/BirthdayReminder'),
+    { ssr: false }
+);
 
 const MyApp = ({ Component, pageProps }) => {
     useEffect(() => {
@@ -98,6 +105,8 @@ const MyApp = ({ Component, pageProps }) => {
                 }
             `}</style>
              <DarkModeToggle />
+
+             <BirthdayReminder />
 
         </>
     );

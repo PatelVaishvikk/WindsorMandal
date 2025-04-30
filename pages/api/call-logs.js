@@ -9,7 +9,20 @@ export default async function handler(req, res) {
   switch (method) {
     case 'GET': {
       try {
-        const { page, limit, search } = req.query;
+        const { page, limit, search, studentIds, countOnly } = req.query;
+        // If requesting counts for multiple students
+        if (studentIds && countOnly === '1') {
+          const ids = studentIds.split(',');
+          const counts = {};
+          const results = await CallLog.aggregate([
+            { $match: { student_id: { $in: ids.map(id => (typeof id === 'string' ? require('mongoose').Types.ObjectId(id) : id)) } } },
+            { $group: { _id: '$student_id', count: { $sum: 1 } } }
+          ]);
+          results.forEach(r => { counts[r._id.toString()] = r.count; });
+          // Ensure all ids are present (even if 0)
+          ids.forEach(id => { if (!counts[id]) counts[id] = 0; });
+          return res.status(200).json({ counts });
+        }
         const pageNum = parseInt(page || '1', 10);
         const limitNum = parseInt(limit || '10', 10);
         const skip = (pageNum - 1) * limitNum;
@@ -91,12 +104,21 @@ export default async function handler(req, res) {
         if (data.follow_up_date) {
           data.follow_up_date = new Date(data.follow_up_date);
         }
+        // Allow manual timestamp entry
+        let timestamp = Date.now();
+        if (data.timestamp) {
+          const parsedTimestamp = new Date(data.timestamp);
+          if (!isNaN(parsedTimestamp.getTime())) {
+            timestamp = parsedTimestamp;
+          }
+        }
         const newCallLog = new CallLog({
           student_id: data.student_id,
           status: data.status || 'Completed',
           notes: data.notes || '',
           needs_follow_up: !!data.needs_follow_up,
-          follow_up_date: data.follow_up_date || (data.needs_follow_up ? undefined : null)
+          follow_up_date: data.follow_up_date || (data.needs_follow_up ? undefined : null),
+          timestamp // set the timestamp
         });
         await newCallLog.save();
         const callLogObj = newCallLog.toObject();
