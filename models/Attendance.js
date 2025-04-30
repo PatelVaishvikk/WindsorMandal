@@ -2,33 +2,35 @@
 import mongoose from 'mongoose';
 
 const AttendanceSchema = new mongoose.Schema({
-  student: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Student', 
-    required: [true, 'Student reference is required'] 
+  student: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Student',
+    required: true
   },
-  assemblyDate: { 
-    type: Date, 
-    required: [true, 'Assembly date is required'] 
+  assemblyDate: {
+    type: Date,
+    required: true
   },
-  attended: { 
-    type: Boolean, 
-    required: true, 
-    default: false 
+  attended: {
+    type: Boolean,
+    default: false
   },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
+  createdAt: {
+    type: Date,
+    default: Date.now
   },
-  updatedAt: { 
-    type: Date, 
-    default: Date.now 
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
 });
 
-// Update the updatedAt timestamp before saving
+// Create a compound index for student and assemblyDate
+AttendanceSchema.index({ student: 1, assemblyDate: 1 }, { unique: true });
+
+// Update the updatedAt field on save
 AttendanceSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
+  this.updatedAt = new Date();
   next();
 });
 
