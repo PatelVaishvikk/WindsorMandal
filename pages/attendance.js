@@ -216,30 +216,38 @@ export default function AttendancePage() {
       if (!res.ok) throw new Error('Failed to fetch attendance');
       const data = await res.json();
       
-      // Update attendance state
+      // Initialize all students as absent first
       const newAttendance = {};
+      students.forEach(student => {
+        newAttendance[student._id] = false;
+      });
+      
+      // Update with actual attendance data
       data.attendances.forEach(rec => {
         if (rec.student?._id) {
           newAttendance[rec.student._id] = rec.attended;
         }
       });
-      setAttendance(prev => ({ ...prev, ...newAttendance }));
+      
+      setAttendance(newAttendance);
       
       // Calculate stats
-      const presentCount = data.attendances.filter(r => r.attended).length;
-      const absentCount = data.attendances.length - presentCount;
-      const percentage = data.attendances.length > 0 
-        ? Math.round((presentCount / data.attendances.length) * 100) 
-        : 0;
+      const presentCount = Object.values(newAttendance).filter(Boolean).length;
+      const totalCount = students.length;
+      const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
       
-      setDailyStats({ present: presentCount, absent: absentCount, percentage });
+      setDailyStats({
+        present: presentCount,
+        absent: totalCount - presentCount,
+        percentage
+      });
     } catch (err) {
       console.error('Error fetching attendance:', err);
       showToast('error', 'Failed to load attendance data');
     } finally {
       setLoadingStates(prev => ({ ...prev, attendance: false }));
     }
-  }, [showToast]);
+  }, [students, showToast]);
 
   // Fetch overall attendance stats
   const fetchOverallAttendance = useCallback(async () => {
@@ -301,34 +309,73 @@ export default function AttendancePage() {
   }, []);
 
   // Toggle attendance for a student
-  const handleToggleAttendance = (studentId) => {
-    setAttendance(prev => ({ ...prev, [studentId]: !prev[studentId] }));
-  };
+  const handleToggleAttendance = useCallback((studentId) => {
+    setAttendance(prev => {
+      const newAttendance = { ...prev };
+      newAttendance[studentId] = !prev[studentId];
+      
+      // Update daily stats
+      const presentCount = Object.values(newAttendance).filter(Boolean).length;
+      const totalCount = students.length;
+      const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+      
+      setDailyStats({
+        present: presentCount,
+        absent: totalCount - presentCount,
+        percentage
+      });
+      
+      return newAttendance;
+    });
+  }, [students.length]);
 
   // Bulk attendance actions
-  const handleBulkAction = (action) => {
-    const newAttendance = { ...attendance };
-    uiStates.selectedStudents.forEach(student => {
-      switch (action) {
-        case 'markPresent': newAttendance[student._id] = true; break;
-        case 'markAbsent': newAttendance[student._id] = false; break;
-        case 'toggle': newAttendance[student._id] = !newAttendance[student._id]; break;
-        default: break;
-      }
+  const handleBulkAction = useCallback((action) => {
+    setAttendance(prev => {
+      const newAttendance = { ...prev };
+      uiStates.selectedStudents.forEach(student => {
+        switch (action) {
+          case 'markPresent':
+            newAttendance[student._id] = true;
+            break;
+          case 'markAbsent':
+            newAttendance[student._id] = false;
+            break;
+          case 'toggle':
+            newAttendance[student._id] = !prev[student._id];
+            break;
+          default:
+            break;
+        }
+      });
+      
+      // Update daily stats
+      const presentCount = Object.values(newAttendance).filter(Boolean).length;
+      const totalCount = students.length;
+      const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+      
+      setDailyStats({
+        present: presentCount,
+        absent: totalCount - presentCount,
+        percentage
+      });
+      
+      return newAttendance;
     });
-    setAttendance(newAttendance);
+    
     setUiStates(prev => ({ ...prev, selectedStudents: [] }));
     showToast('success', `Updated ${uiStates.selectedStudents.length} students`);
-  };
+  }, [uiStates.selectedStudents, students.length, showToast]);
 
   // Submit attendance to server
   const submitAttendance = useCallback(async () => {
     setLoadingStates(prev => ({ ...prev, submitting: true }));
     try {
-      const updates = Object.entries(attendance).map(([studentId, attended]) => ({
-        student: studentId,
+      // Prepare updates array with all students
+      const updates = students.map(student => ({
+        student: student._id,
         assemblyDate,
-        attended
+        attended: attendance[student._id] || false
       }));
       
       const res = await fetch('/api/attendance', {
@@ -348,7 +395,7 @@ export default function AttendancePage() {
     } finally {
       setLoadingStates(prev => ({ ...prev, submitting: false }));
     }
-  }, [attendance, assemblyDate, fetchAttendanceData, fetchOverallAttendance]);
+  }, [attendance, assemblyDate, students, fetchAttendanceData, fetchOverallAttendance, showToast]);
 
   // Delete attendance functions
   const confirmDelete = (type, id = null, date = null) => {
@@ -405,6 +452,25 @@ export default function AttendancePage() {
       const student = students.find(s => s._id === result);
       if (!student) throw new Error('Student not found');
       
+      // Update local state first
+      setAttendance(prev => {
+        const newAttendance = { ...prev, [student._id]: true };
+        
+        // Update daily stats
+        const presentCount = Object.values(newAttendance).filter(Boolean).length;
+        const totalCount = students.length;
+        const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+        
+        setDailyStats({
+          present: presentCount,
+          absent: totalCount - presentCount,
+          percentage
+        });
+        
+        return newAttendance;
+      });
+      
+      // Then update server
       const res = await fetch('/api/attendance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -417,14 +483,12 @@ export default function AttendancePage() {
       
       if (!res.ok) throw new Error('Failed to mark attendance');
       
-      setAttendance(prev => ({ ...prev, [student._id]: true }));
       setQrScanData(prev => ({
         ...prev,
         success: `${student.first_name} ${student.last_name} marked present`
       }));
       
       showToast('success', 'Attendance marked via QR');
-      fetchAttendanceData(assemblyDate);
     } catch (err) {
       console.error("QR Attendance Error:", err);
       showToast('error', 'QR scan failed');
@@ -433,7 +497,7 @@ export default function AttendancePage() {
         setQrScanData(prev => ({ ...prev, scanning: false }));
       }, 2000);
     }
-  }, [assemblyDate, fetchAttendanceData, students, qrScanData.scanning]);
+  }, [assemblyDate, students, qrScanData.scanning, showToast]);
 
   // Add this new function before the viewHistory function
   const calculateAttendanceStats = (records) => {
@@ -537,7 +601,7 @@ export default function AttendancePage() {
         const percentage = overallAttendance[row._id];
         return (
           <div className="d-flex align-items-center">
-            <div className="d-none d-md-block">
+            <div>
               <Form.Switch
                 id={`attendance-switch-${row._id}`}
                 checked={attendance[row._id] || false}
@@ -560,7 +624,7 @@ export default function AttendancePage() {
                   {attendance[row._id] ? 'Present' : 'Absent'}
                 </small>
               </div>
-              <ProgressBar className="mt-1" style={{ height: '4px' }}>
+              <ProgressBar className="mt-1 d-none d-md-block" style={{ height: '4px' }}>
                 <ProgressBar 
                   variant={
                     percentage >= HIGH_ATTENDANCE_THRESHOLD ? 'success' :
@@ -573,7 +637,7 @@ export default function AttendancePage() {
           </div>
         );
       },
-      minWidth: '200px'
+      minWidth: '150px'
     },
     {
       name: 'Actions',
