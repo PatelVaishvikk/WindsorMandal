@@ -126,7 +126,8 @@ export default function AttendancePage() {
     studentHistory: false,
     confirmDelete: false,
     confirmReset: false,
-    deleteTarget: null
+    deleteTarget: null,
+    datesHistory: false
   });
 
   // Data states
@@ -158,6 +159,13 @@ export default function AttendancePage() {
 
   // Add this to the state declarations at the top of the component
   const [error, setError] = useState('');
+
+  // Add new state for attendance dates history
+  const [attendanceDatesHistory, setAttendanceDatesHistory] = useState({
+    loading: false,
+    dates: [],
+    error: null
+  });
 
   // Toast notification system
   const showToast = useCallback((type, message, autoClose = true) => {
@@ -568,6 +576,38 @@ export default function AttendancePage() {
     }
   }, [students, attendance, overallAttendance, assemblyDate]);
 
+  // Add function to fetch attendance dates history
+  const fetchAttendanceDatesHistory = useCallback(async () => {
+    setAttendanceDatesHistory(prev => ({ ...prev, loading: true, error: null }));
+    try {
+      const res = await fetch('/api/attendance/dates');
+      if (!res.ok) throw new Error('Failed to fetch attendance dates');
+      const data = await res.json();
+      
+      // Sort dates in descending order
+      const sortedDates = data.dates.sort((a, b) => new Date(b.date) - new Date(a.date));
+      setAttendanceDatesHistory(prev => ({ 
+        ...prev, 
+        dates: sortedDates,
+        loading: false 
+      }));
+    } catch (err) {
+      console.error('Error fetching attendance dates:', err);
+      setAttendanceDatesHistory(prev => ({ 
+        ...prev, 
+        error: 'Failed to load attendance dates',
+        loading: false 
+      }));
+    }
+  }, []);
+
+  // Add useEffect to fetch dates when modal opens
+  useEffect(() => {
+    if (modalStates.datesHistory) {
+      fetchAttendanceDatesHistory();
+    }
+  }, [modalStates.datesHistory, fetchAttendanceDatesHistory]);
+
   // Responsive columns configuration
   const columns = useMemo(() => [
     {
@@ -802,6 +842,16 @@ export default function AttendancePage() {
                 size="sm"
               >
                 <FaQrcode className="me-1" /> <span className="d-none d-md-inline">QR Scanner</span>
+              </Button>
+              <Button 
+                variant="light"
+                className="me-2 d-flex align-items-center"
+                onClick={() => setModalStates(prev => ({ ...prev, datesHistory: true }))}
+                size="sm"
+              >
+                <FaHistory className="me-1" /> 
+                <span className="d-none d-md-inline">Dates History</span>
+                <span className="d-md-none">History</span>
               </Button>
               <Dropdown>
                 <Dropdown.Toggle variant="light" className="d-flex align-items-center" size="sm">
@@ -1387,8 +1437,7 @@ export default function AttendancePage() {
                     <Table striped bordered hover responsive>
                       <thead>
                         <tr>
-                          <th>Date</th>
-                          <th>Day</th>
+                          <th>Student Name</th>
                           <th>Status</th>
                         </tr>
                       </thead>
@@ -1399,9 +1448,6 @@ export default function AttendancePage() {
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric'
-                            })}</td>
-                            <td>{new Date(record.assemblyDate).toLocaleDateString('en-US', {
-                              weekday: 'long'
                             })}</td>
                             <td>
                               <div className={styles.badgeWrapper}>
@@ -1424,6 +1470,113 @@ export default function AttendancePage() {
             </Modal.Body>
           </Modal>
         </div>
+
+        {/* Attendance Dates History Modal */}
+        <Modal
+          show={modalStates.datesHistory}
+          onHide={() => setModalStates(prev => ({ ...prev, datesHistory: false }))}
+          size="xl"
+          scrollable
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Attendance History by Date</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {attendanceDatesHistory.loading ? (
+              <div className="text-center py-4">
+                <Spinner animation="border" variant="primary" />
+              </div>
+            ) : attendanceDatesHistory.error ? (
+              <Alert variant="danger">
+                <FaExclamationTriangle className="me-2" />
+                {attendanceDatesHistory.error}
+              </Alert>
+            ) : (
+              <div>
+                {attendanceDatesHistory.dates.map(dateData => (
+                  <Card key={dateData.date} className="mb-3">
+                    <Card.Header>
+                      <div className="d-flex justify-content-between align-items-center">
+                        <div>
+                          <h5 className="mb-0">{format(parseISO(dateData.date), 'MMMM d, yyyy')}</h5>
+                          <small className="text-muted">{format(parseISO(dateData.date), 'EEEE')}</small>
+                        </div>
+                        <div className="d-flex align-items-center">
+                          <div className="text-end me-3">
+                            <div>
+                              <Badge bg="success" className="me-1">Present: {dateData.presentCount}</Badge>
+                              <Badge bg="danger" className="me-1">Absent: {dateData.absentCount}</Badge>
+                              <Badge 
+                                bg={
+                                  (dateData.presentCount / dateData.totalCount * 100) >= HIGH_ATTENDANCE_THRESHOLD ? 'success' :
+                                  (dateData.presentCount / dateData.totalCount * 100) >= LOW_ATTENDANCE_THRESHOLD ? 'warning' : 'danger'
+                                }
+                              >
+                                {Math.round(dateData.presentCount / dateData.totalCount * 100)}%
+                              </Badge>
+                            </div>
+                            <small className="text-muted">Total: {dateData.totalCount} students</small>
+                          </div>
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            onClick={() => {
+                              setAssemblyDate(dateData.date);
+                              setModalStates(prev => ({ ...prev, datesHistory: false }));
+                            }}
+                          >
+                            View Full Day
+                          </Button>
+                        </div>
+                      </div>
+                    </Card.Header>
+                    <Card.Body className="p-0">
+                      <div className="table-responsive">
+                        <Table hover className="mb-0">
+                          <thead>
+                            <tr>
+                              <th>Student Name</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dateData.students
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map(student => (
+                                <tr key={student.id}>
+                                  <td>{student.name}</td>
+                                  <td>
+                                    <Badge 
+                                      bg={student.attended ? 'success' : 'danger'}
+                                      className="d-inline-flex align-items-center"
+                                    >
+                                      {student.attended ? (
+                                        <><FaCheckCircle className="me-1" /> Present</>
+                                      ) : (
+                                        <><FaTimesCircle className="me-1" /> Absent</>
+                                      )}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                            ))}
+                          </tbody>
+                        </Table>
+                      </div>
+                    </Card.Body>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button 
+              variant="secondary" 
+              onClick={() => setModalStates(prev => ({ ...prev, datesHistory: false }))}
+            >
+              Close
+            </Button>
+          </Modal.Footer>
+        </Modal>
       </Container>
     </div>
   );
