@@ -97,31 +97,9 @@ const LOW_ATTENDANCE_THRESHOLD = 50;
 const HIGH_ATTENDANCE_THRESHOLD = 80;
 const DEFAULT_DATE_FORMAT = 'yyyy-MM-dd';
 
-// Add these helper functions near the top of the file, after the imports
-const formatDateForInput = (date) => {
-  if (!date) return '';
-  // Create date in local timezone
-  const d = new Date(date);
-  // Format in YYYY-MM-DD
-  return d.toLocaleDateString('en-CA'); // en-CA format gives YYYY-MM-DD
-};
-
-const formatDateForDisplay = (dateString) => {
-  if (!dateString) return '';
-  // Parse the date string in local timezone
-  const date = new Date(dateString);
-  return format(date, 'yyyy-MM-dd');
-};
-
-const parseLocalDate = (dateString) => {
-  if (!dateString) return null;
-  const date = new Date(dateString);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-};
-
 export default function AttendancePage() {
   // State management
-  const [assemblyDate, setAssemblyDate] = useState(formatDateForInput(new Date()));
+  const [assemblyDate, setAssemblyDate] = useState(format(new Date(), DEFAULT_DATE_FORMAT));
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState({});
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -242,9 +220,7 @@ export default function AttendancePage() {
     setLoadingStates(prev => ({ ...prev, attendance: true }));
     
     try {
-      // Use the date as is since it's already in local timezone
-      const formattedDate = date;
-      const res = await fetch(`/api/attendance?assemblyDate=${formattedDate}&limit=0`);
+      const res = await fetch(`/api/attendance?assemblyDate=${date}&limit=0`);
       if (!res.ok) throw new Error('Failed to fetch attendance');
       const data = await res.json();
       
@@ -263,17 +239,18 @@ export default function AttendancePage() {
       
       setAttendance(newAttendance);
       
-      // Calculate daily stats
-      const presentCount = data.attendances.filter(rec => rec.attended).length;
+      // Calculate stats
+      const presentCount = Object.values(newAttendance).filter(Boolean).length;
       const totalCount = students.length;
+      const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+      
       setDailyStats({
         present: presentCount,
         absent: totalCount - presentCount,
-        percentage: totalCount > 0 ? (presentCount / totalCount) * 100 : 0
+        percentage
       });
-      
     } catch (err) {
-      console.error("Error fetching attendance:", err);
+      console.error('Error fetching attendance:', err);
       showToast('error', 'Failed to load attendance data');
     } finally {
       setLoadingStates(prev => ({ ...prev, attendance: false }));
@@ -288,10 +265,9 @@ export default function AttendancePage() {
       const data = await res.json();
       
       // Calculate Friday attendance percentages
-      const fridayRecords = data.attendances.filter(rec => {
-        const date = parseLocalDate(rec.assemblyDate);
-        return date && date.getDay() === 5; // 5 is Friday
-      });
+      const fridayRecords = data.attendances.filter(rec => 
+        isFriday(parseISO(rec.assemblyDate))
+      );
       
       const studentCounts = {};
       const studentTotals = {};
@@ -403,11 +379,11 @@ export default function AttendancePage() {
   const submitAttendance = useCallback(async () => {
     setLoadingStates(prev => ({ ...prev, submitting: true }));
     try {
-      // Use the selected date directly without modification
-      const updates = Object.entries(attendance).map(([studentId, attended]) => ({
-        student: studentId,
-        assemblyDate: assemblyDate, // Use the selected date directly
-        attended
+      // Prepare updates array with all students
+      const updates = students.map(student => ({
+        student: student._id,
+        assemblyDate,
+        attended: attendance[student._id] || false
       }));
       
       const res = await fetch('/api/attendance', {
@@ -418,47 +394,16 @@ export default function AttendancePage() {
       
       if (!res.ok) throw new Error('Failed to submit attendance');
       
-      showToast('success', 'Attendance submitted successfully');
-      
-      // Refresh both attendance data and statistics with the exact same date
-      await Promise.all([
-        fetchAttendanceData(assemblyDate),
-        fetchOverallAttendance()
-      ]);
-      
-      // Update daily stats immediately
-      const presentCount = Object.values(attendance).filter(Boolean).length;
-      const totalCount = students.length;
-      const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
-      
-      setDailyStats({
-        present: presentCount,
-        absent: totalCount - presentCount,
-        percentage
-      });
+      showToast('success', 'Attendance saved successfully');
+      fetchAttendanceData(assemblyDate);
+      fetchOverallAttendance();
     } catch (err) {
-      console.error("Error submitting attendance:", err);
-      showToast('error', 'Failed to submit attendance');
+      console.error('Error submitting attendance:', err);
+      showToast('error', 'Failed to save attendance');
     } finally {
       setLoadingStates(prev => ({ ...prev, submitting: false }));
     }
   }, [attendance, assemblyDate, students, fetchAttendanceData, fetchOverallAttendance, showToast]);
-
-  // Update the date change handler
-  const handleDateChange = useCallback((newDate) => {
-    setAssemblyDate(newDate);
-    // Reset attendance when date changes
-    const resetAttendance = {};
-    students.forEach(student => {
-      resetAttendance[student._id] = false;
-    });
-    setAttendance(resetAttendance);
-    setDailyStats({
-      present: 0,
-      absent: students.length,
-      percentage: 0
-    });
-  }, [students]);
 
   // Delete attendance functions
   const confirmDelete = (type, id = null, date = null) => {
@@ -563,7 +508,7 @@ export default function AttendancePage() {
   }, [assemblyDate, students, qrScanData.scanning, showToast]);
 
   // Add this new function before the viewHistory function
-  const calculateAttendanceStats = useCallback((records) => {
+  const calculateAttendanceStats = (records) => {
     const totalDays = records.length;
     const presentDays = records.filter(record => record.attended).length;
     const absentDays = totalDays - presentDays;
@@ -573,9 +518,9 @@ export default function AttendancePage() {
       totalDays,
       presentDays,
       absentDays,
-      attendancePercentage: parseFloat(attendancePercentage)
+      attendancePercentage
     };
-  }, []);
+  };
 
   // Replace the existing viewHistory function with this enhanced version
   const viewHistory = async (student) => {
@@ -832,7 +777,7 @@ export default function AttendancePage() {
                     <Form.Control
                       type="date"
                       value={assemblyDate}
-                      onChange={(e) => handleDateChange(e.target.value)}
+                      onChange={(e) => setAssemblyDate(e.target.value)}
                       max={format(new Date(), DEFAULT_DATE_FORMAT)}
                     />
                   </Form.Group>
@@ -933,7 +878,7 @@ export default function AttendancePage() {
                   <Form.Control
                     type="date"
                     value={assemblyDate}
-                    onChange={(e) => handleDateChange(e.target.value)}
+                    onChange={(e) => setAssemblyDate(e.target.value)}
                     max={format(new Date(), DEFAULT_DATE_FORMAT)}
                   />
                 </Form.Group>
