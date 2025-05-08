@@ -8,7 +8,7 @@ const AttendanceSchema = new mongoose.Schema({
     required: true
   },
   assemblyDate: {
-    type: Date,
+    type: String,
     required: true
   },
   attended: {

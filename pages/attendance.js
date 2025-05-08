@@ -52,7 +52,7 @@ import {
 } from 'chart.js';
 import Navigation from '../components/Navbar';
 import styles from '../styles/Attendance.module.css';
-import { format, parseISO, isFriday } from 'date-fns';
+import { format, parseISO, isFriday, parse, isValid } from 'date-fns';
 
 // Register Chart.js components
 ChartJS.register(
@@ -830,7 +830,7 @@ export default function AttendancePage() {
             <div className="d-none d-md-block">
               <h4 className="mb-0">Attendance Management</h4>
               <small className="opacity-75">
-                {format(parseISO(assemblyDate), 'MMMM d, yyyy')}
+                {format(parse(assemblyDate, 'yyyy-MM-dd', new Date()), 'MMMM d, yyyy')}
               </small>
             </div>
             <div className="d-flex">
@@ -1498,8 +1498,16 @@ export default function AttendancePage() {
                     <Card.Header>
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h5 className="mb-0">{format(parseISO(dateData.date), 'MMMM d, yyyy')}</h5>
-                          <small className="text-muted">{format(parseISO(dateData.date), 'EEEE')}</small>
+                          {(() => {
+                            const parsedDate = parse(dateData.date, 'yyyy-MM-dd', new Date());
+                            const isDateValid = isValid(parsedDate);
+                            return (
+                              <>
+                                <h5 className="mb-0">{isDateValid ? format(parsedDate, 'MMMM d, yyyy') : 'Invalid date'}</h5>
+                                <small className="text-muted">{isDateValid ? format(parsedDate, 'EEEE') : ''}</small>
+                              </>
+                            );
+                          })()}
                         </div>
                         <div className="d-flex align-items-center">
                           <div className="text-end me-3">
