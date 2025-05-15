@@ -25,7 +25,13 @@ export default function AddStudent() {
     education: '',
     emergency_contact: '',
     notes: '',
-    events: [] // Array to store multiple events
+    events: [], // Array to store multiple events
+    // Moved out fields
+    moved_out: false,
+    moved_out_date: '',
+    moved_out_job: '',
+    moved_out_address: '',
+    moved_out_notes: ''
   });
 
   // Event types for dropdown
@@ -110,7 +116,12 @@ export default function AddStudent() {
         year: event.year.trim(),
         role: event.role?.trim() || '',
         notes: event.notes?.trim() || ''
-      }))
+      })),
+      moved_out: formData.moved_out || false,
+      moved_out_date: formData.moved_out_date || '',
+      moved_out_job: formData.moved_out_job || '',
+      moved_out_address: formData.moved_out_address || '',
+      moved_out_notes: formData.moved_out_notes || ''
     };
 
     // Validate required fields
@@ -157,7 +168,12 @@ export default function AddStudent() {
         education: '',
         emergency_contact: '',
         notes: '',
-        events: []
+        events: [],
+        moved_out: false,
+        moved_out_date: '',
+        moved_out_job: '',
+        moved_out_address: '',
+        moved_out_notes: ''
       });
       
       // Redirect to Students table after a short delay
@@ -187,7 +203,12 @@ export default function AddStudent() {
       education: '',
       emergency_contact: '',
       notes: '',
-      events: []
+      events: [],
+      moved_out: false,
+      moved_out_date: '',
+      moved_out_job: '',
+      moved_out_address: '',
+      moved_out_notes: ''
     });
     setError('');
   };
@@ -359,6 +380,68 @@ export default function AddStudent() {
                           </Form.Group>
                         </Col>
                       </Row>
+                      {/* Moved Out Section */}
+                      <Card className="mb-3">
+                        <Card.Header className="bg-light">
+                          <h6 className="mb-0">Moved Out Information</h6>
+                        </Card.Header>
+                        <Card.Body>
+                          <Form.Check
+                            type="checkbox"
+                            id="movedOutCheckbox"
+                            label="Student has moved out of Windsor"
+                            checked={formData.moved_out}
+                            onChange={e => setFormData({ ...formData, moved_out: e.target.checked })}
+                            className="mb-3"
+                          />
+                          {formData.moved_out && (
+                            <>
+                              <Row>
+                                <Col md={6}>
+                                  <Form.Group className="mb-3">
+                                    <Form.Label>Date Moved Out</Form.Label>
+                                    <Form.Control
+                                      type="date"
+                                      value={formData.moved_out_date}
+                                      onChange={e => setFormData({ ...formData, moved_out_date: e.target.value })}
+                                    />
+                                  </Form.Group>
+                                </Col>
+                                <Col md={6}>
+                                  <Form.Group className="mb-3">
+                                    <Form.Label>Job/Occupation</Form.Label>
+                                    <Form.Control
+                                      type="text"
+                                      value={formData.moved_out_job}
+                                      onChange={e => setFormData({ ...formData, moved_out_job: e.target.value })}
+                                      placeholder="What job are they doing?"
+                                    />
+                                  </Form.Group>
+                                </Col>
+                              </Row>
+                              <Form.Group className="mb-3">
+                                <Form.Label>New Address</Form.Label>
+                                <Form.Control
+                                  type="text"
+                                  value={formData.moved_out_address}
+                                  onChange={e => setFormData({ ...formData, moved_out_address: e.target.value })}
+                                  placeholder="New address after moving out"
+                                />
+                              </Form.Group>
+                              <Form.Group className="mb-3">
+                                <Form.Label>Notes about move</Form.Label>
+                                <Form.Control
+                                  as="textarea"
+                                  rows={2}
+                                  value={formData.moved_out_notes}
+                                  onChange={e => setFormData({ ...formData, moved_out_notes: e.target.value })}
+                                  placeholder="Any notes about the move (optional)"
+                                />
+                              </Form.Group>
+                            </>
+                          )}
+                        </Card.Body>
+                      </Card>
                     </Card.Body>
                   </Card>
 

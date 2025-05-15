@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'; // <--- Added useMemo here
 // Import necessary components from react-bootstrap
-import { Modal, Button, Form, Badge, Toast, Row, Col, InputGroup, Spinner, DropdownButton, Dropdown, Container } from 'react-bootstrap';
+import { Modal, Button, Form, Badge, Toast, Row, Col, InputGroup, Spinner, DropdownButton, Dropdown, Container, Card } from 'react-bootstrap';
 import dynamic from 'next/dynamic';
 import Navbar from '../components/Navbar'; // Verify path
 import Head from 'next/head';
@@ -242,7 +242,13 @@ export default function StudentsTable() {
       atmiya_youth_years: student.atmiya_youth_years || '',
       yuva_mahotsav: student.yuva_mahotsav || false,
       yuva_mahotsav_years: student.yuva_mahotsav_years || '',
-      harimay: student.harimay || false
+      harimay: student.harimay || false,
+      // Moved out fields
+      moved_out: student.moved_out || false,
+      moved_out_date: student.moved_out_date ? formatDateForInput(student.moved_out_date) : '',
+      moved_out_job: student.moved_out_job || '',
+      moved_out_address: student.moved_out_address || '',
+      moved_out_notes: student.moved_out_notes || ''
     });
     setShowEditModal(true);
   }, []);
@@ -529,7 +535,7 @@ export default function StudentsTable() {
               <div className="table-container" style={{ overflowX: 'auto' }}>
                 <DataTable
                   columns={columns}
-                  data={students}
+                  data={students.filter(s => !s.moved_out)}
                   progressPending={loading}
                   progressComponent={
                     <div className="text-center py-5">
@@ -719,6 +725,68 @@ export default function StudentsTable() {
                 <Form.Label className="small mb-1">Notes</Form.Label>
                 <Form.Control size="sm" as="textarea" rows={3} placeholder="Additional notes..." value={editForm.notes} onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })} />
               </Form.Group>
+              {/* Moved Out Section */}
+              <Card className="mb-3">
+                <Card.Header className="bg-light">
+                  <h6 className="mb-0">Moved Out Information</h6>
+                </Card.Header>
+                <Card.Body>
+                  <Form.Check
+                    type="checkbox"
+                    id="editMovedOutCheckbox"
+                    label="Student has moved out of Windsor"
+                    checked={editForm.moved_out}
+                    onChange={e => setEditForm({ ...editForm, moved_out: e.target.checked })}
+                    className="mb-3"
+                  />
+                  {editForm.moved_out && (
+                    <>
+                      <Row>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>Date Moved Out</Form.Label>
+                            <Form.Control
+                              type="date"
+                              value={editForm.moved_out_date}
+                              onChange={e => setEditForm({ ...editForm, moved_out_date: e.target.value })}
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col md={6}>
+                          <Form.Group className="mb-3">
+                            <Form.Label>Job/Occupation</Form.Label>
+                            <Form.Control
+                              type="text"
+                              value={editForm.moved_out_job}
+                              onChange={e => setEditForm({ ...editForm, moved_out_job: e.target.value })}
+                              placeholder="What job are they doing?"
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+                      <Form.Group className="mb-3">
+                        <Form.Label>New Address</Form.Label>
+                        <Form.Control
+                          type="text"
+                          value={editForm.moved_out_address}
+                          onChange={e => setEditForm({ ...editForm, moved_out_address: e.target.value })}
+                          placeholder="New address after moving out"
+                        />
+                      </Form.Group>
+                      <Form.Group className="mb-3">
+                        <Form.Label>Notes about move</Form.Label>
+                        <Form.Control
+                          as="textarea"
+                          rows={2}
+                          value={editForm.moved_out_notes}
+                          onChange={e => setEditForm({ ...editForm, moved_out_notes: e.target.value })}
+                          placeholder="Any notes about the move (optional)"
+                        />
+                      </Form.Group>
+                    </>
+                  )}
+                </Card.Body>
+              </Card>
             </Form>
           )}
         </Modal.Body>
@@ -856,6 +924,33 @@ export default function StudentsTable() {
         <Modal.Body>
           {selectedStudent && (
             <Container>
+              {/* Moved Out Section */}
+              {selectedStudent.moved_out && (
+                <Card className="mb-3 border-danger">
+                  <Card.Body>
+                    <h5 className="text-danger mb-2">
+                      <Badge bg="danger" className="me-2">Moved Out</Badge>
+                      This student has moved out of Windsor
+                    </h5>
+                    <Row className="mb-2">
+                      <Col xs={4}><strong>Date Moved Out:</strong></Col>
+                      <Col xs={8}>{selectedStudent.moved_out_date ? formatDateForDisplay(selectedStudent.moved_out_date) : 'N/A'}</Col>
+                    </Row>
+                    <Row className="mb-2">
+                      <Col xs={4}><strong>Job/Occupation:</strong></Col>
+                      <Col xs={8}>{selectedStudent.moved_out_job || 'N/A'}</Col>
+                    </Row>
+                    <Row className="mb-2">
+                      <Col xs={4}><strong>New Address:</strong></Col>
+                      <Col xs={8}>{selectedStudent.moved_out_address || 'N/A'}</Col>
+                    </Row>
+                    <Row className="mb-2">
+                      <Col xs={4}><strong>Notes:</strong></Col>
+                      <Col xs={8}>{selectedStudent.moved_out_notes || 'N/A'}</Col>
+                    </Row>
+                  </Card.Body>
+                </Card>
+              )}
               <Row className="mb-2">
                 <Col xs={4}><strong>First Name:</strong></Col>
                 <Col xs={8}>{selectedStudent.first_name || 'N/A'}</Col>

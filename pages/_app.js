@@ -49,8 +49,8 @@ const MyApp = ({ Component, pageProps }) => {
 
             <style jsx global>{`
                 body {
-                    background-color: #f8f9fc;
-                    color: #2e3a46;
+                    background-color: var(--gray-100);
+                    color: var(--gray-900);
                 }
 
                 .app-container {
@@ -65,6 +65,8 @@ const MyApp = ({ Component, pageProps }) => {
                     border: none;
                     border-radius: 0.5rem;
                     box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+                    background-color: var(--gray-100);
+                    color: var(--gray-900);
                 }
 
                 .btn {
@@ -73,13 +75,14 @@ const MyApp = ({ Component, pageProps }) => {
 
                 .form-control:focus,
                 .form-select:focus {
-                    border-color: #4e73df;
-                    box-shadow: 0 0 0 0.25rem rgba(78, 115, 223, 0.25);
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.25);
                 }
 
                 .table th {
                     font-weight: 600;
-                    background-color: #f8f9fc;
+                    background-color: var(--gray-100);
+                    color: var(--gray-900);
                 }
 
                 .badge {
@@ -90,17 +93,19 @@ const MyApp = ({ Component, pageProps }) => {
                     border: none;
                     border-radius: 0.5rem;
                     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+                    background-color: var(--gray-100);
+                    color: var(--gray-900);
                 }
 
                 .modal-header {
                     border-bottom: 1px solid #e3e6f0;
-                    background-color: #f8f9fc;
+                    background-color: var(--gray-100);
                     border-radius: 0.5rem 0.5rem 0 0;
                 }
 
                 .modal-footer {
                     border-top: 1px solid #e3e6f0;
-                    background-color: #f8f9fc;
+                    background-color: var(--gray-100);
                     border-radius: 0 0 0.5rem 0.5rem;
                 }
             `}</style>

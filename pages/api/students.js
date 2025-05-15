@@ -211,6 +211,22 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Email already exists' });
           }
         }
+        // Handle moved out fields
+        const movedOutFields = [
+          'moved_out',
+          'moved_out_date',
+          'moved_out_job',
+          'moved_out_address',
+          'moved_out_notes'
+        ];
+        for (const field of movedOutFields) {
+          if (data.hasOwnProperty(field)) {
+            // Parse date if needed
+            if (field === 'moved_out_date' && data[field]) {
+              data[field] = formatDate(data[field]);
+            }
+          }
+        }
         const newStudent = new Student(data);
         await newStudent.save();
         const studentObj = newStudent.toObject();
@@ -257,15 +273,20 @@ export default async function handler(req, res) {
           'atmiya_youth_years',
           'yuva_mahotsav',
           'yuva_mahotsav_years',
-          'harimay'
+          'harimay',
+          // Add moved out fields
+          'moved_out',
+          'moved_out_date',
+          'moved_out_job',
+          'moved_out_address',
+          'moved_out_notes'
         ];
-        
         for (const field of fields) {
           if (req.body.hasOwnProperty(field)) {
             if (field === 'mail_id') {
               student.mail_id = req.body.mail_id ? req.body.mail_id.trim().toLowerCase() : '';
-            } else if (field === 'date_of_birth') {
-              student.date_of_birth = req.body.date_of_birth ? formatDate(req.body.date_of_birth) : null;
+            } else if (field === 'date_of_birth' || field === 'moved_out_date') {
+              student[field] = req.body[field] ? formatDate(req.body[field]) : null;
             } else {
               student[field] = req.body[field];
             }

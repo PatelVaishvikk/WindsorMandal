@@ -198,7 +198,7 @@ export default function AttendancePage() {
       const res = await fetch('/api/students?limit=0');
       if (!res.ok) throw new Error('Failed to fetch students');
       const data = await res.json();
-      setStudents(data.students || []);
+      setStudents((data.students || []).filter(s => !s.moved_out));
       
       // Initialize attendance state
       const initialAttendance = {};

@@ -9,7 +9,7 @@ const Navigation = () => {
   const router = useRouter();
 
   return (
-    <Navbar bg="white" expand="lg" className="shadow-sm">
+    <Navbar expand="lg" className="shadow-sm">
       <Container>
         <Link href="/" legacyBehavior>
           <Navbar.Brand as="a" className="fw-bold">
@@ -35,6 +35,16 @@ const Navigation = () => {
                 <i className="fas fa-users me-2"></i> Yuvaks
               </Nav.Link>
             </Link>
+            <Link href="/moved-out-students" legacyBehavior>
+              <Nav.Link as="a" active={router.pathname === '/moved-out-students'}>
+                <i className="fas fa-users me-2"></i> Moved Out Students
+              </Nav.Link>
+            </Link>
+            <Link href="/grocery" legacyBehavior>
+              <Nav.Link as="a" active={router.pathname === '/grocery'}>
+                <i className="fas fa-shopping-cart me-2"></i> Grocery
+              </Nav.Link>
+            </Link>
             <Link href="/attendance" legacyBehavior>
               <Nav.Link as="a" active={router.pathname === '/attendance'}>
                 <i className="fas fa-calendar-alt me-2"></i> Attendance
@@ -58,12 +68,12 @@ const Navigation = () => {
           padding: 1rem 0;
         }
         .navbar-brand {
-          color: #4e73df !important;
+          color: var(--primary-color);
           font-size: 1.5rem;
           cursor: pointer;
         }
         .nav-link {
-          color: #5a5c69 !important;
+          color: var(--gray-900);
           font-weight: 500;
           padding: 0.5rem 1rem !important;
           border-radius: 0.375rem;
@@ -71,12 +81,12 @@ const Navigation = () => {
           cursor: pointer;
         }
         .nav-link:hover {
-          color: #4e73df !important;
-          background-color: #f8f9fc;
+          color: var(--primary-color);
+          background-color: var(--gray-100);
         }
         .nav-link.active {
-          color: #4e73df !important;
-          background-color: #f8f9fc;
+          color: var(--primary-color);
+          background-color: var(--gray-100);
         }
       `}</style>
 

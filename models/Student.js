@@ -168,6 +168,30 @@ const StudentSchema = new mongoose.Schema({
     trim: true, 
     default: '' 
   },
+  // --- Moved Out Fields ---
+  moved_out: {
+    type: Boolean,
+    default: false
+  },
+  moved_out_date: {
+    type: Date,
+    default: null
+  },
+  moved_out_job: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  moved_out_address: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  moved_out_notes: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   created_at: { 
     type: Date, 
     default: Date.now 

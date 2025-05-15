@@ -229,14 +229,14 @@ export default function CallLogs() {
     },
     {
       name: 'Date',
-      selector: (row) => row.date,
+      selector: (row) => row.date || row.timestamp,
       sortable: true,
       cell: (row) => {
-        try {
-          return new Date(row.date).toLocaleString();
-        } catch (error) {
-          return 'Invalid Date';
-        }
+        const dateStr = row.date || row.timestamp;
+        if (!dateStr) return 'No date';
+        const parsed = new Date(dateStr);
+        if (isNaN(parsed.getTime())) return 'No date';
+        return parsed.toLocaleString();
       }
     },
     {
