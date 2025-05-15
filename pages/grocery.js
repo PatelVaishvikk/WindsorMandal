@@ -1,28 +1,76 @@
-import { useState } from 'react';
-import { Container, Card, Table, Button, Form, Row, Col, Alert, Tabs, Tab, InputGroup } from 'react-bootstrap';
+import { useState, useEffect } from 'react';
+import { Container, Card, Table, Button, Form, Row, Col, Alert, Tabs, Tab, Spinner } from 'react-bootstrap';
 import Navbar from '../components/Navbar';
 import Head from 'next/head';
 
+const UNIT_OPTIONS = ['kg', 'g', 'L', 'ml', 'pcs', 'pack', 'dozen', 'other'];
+
 export default function GroceryPage() {
   // Grocery stock state
-  const [items, setItems] = useState([
-    // Example: { name: 'Rice', quantity: 2, unit: 'kg', minStock: 1, toBuy: false }
-  ]);
-  const [newItem, setNewItem] = useState({ name: '', quantity: '', unit: '', minStock: '' });
+  const [items, setItems] = useState([]);
+  const [itemsLoading, setItemsLoading] = useState(true);
+  const [itemsError, setItemsError] = useState('');
+  const [newItem, setNewItem] = useState({ name: '', quantity: '', unit: '', minStock: '', note: '' });
   const [editIndex, setEditIndex] = useState(null);
   const [editItem, setEditItem] = useState({});
   const [tab, setTab] = useState('stock');
 
   // Sabha usage state
-  const [sabhaRecords, setSabhaRecords] = useState([]); // { date, menu, groceriesUsed: [{ name, quantity, unit }] }
+  const [sabhaRecords, setSabhaRecords] = useState([]);
+  const [sabhaLoading, setSabhaLoading] = useState(true);
+  const [sabhaError, setSabhaError] = useState('');
   const [newSabha, setNewSabha] = useState({ date: '', menu: '', groceriesUsed: [] });
   const [sabhaGrocery, setSabhaGrocery] = useState({ name: '', quantity: '', unit: '' });
+  const [sabhaDeleteLoading, setSabhaDeleteLoading] = useState(null);
+
+  // Fetch grocery items from API
+  useEffect(() => {
+    setItemsLoading(true);
+    setItemsError('');
+    fetch('/api/grocery')
+      .then(res => res.json())
+      .then(data => {
+        setItems(data.items || []);
+        setItemsLoading(false);
+      })
+      .catch(err => {
+        setItemsError('Failed to load grocery items');
+        setItemsLoading(false);
+      });
+  }, []);
+
+  // Fetch sabha records from API
+  useEffect(() => {
+    setSabhaLoading(true);
+    setSabhaError('');
+    fetch('/api/sabha-grocery')
+      .then(res => res.json())
+      .then(data => {
+        setSabhaRecords(data.records || []);
+        setSabhaLoading(false);
+      })
+      .catch(err => {
+        setSabhaError('Failed to load sabha records');
+        setSabhaLoading(false);
+      });
+  }, []);
 
   // Add new grocery item
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!newItem.name || !newItem.quantity || !newItem.unit) return;
-    setItems([...items, { ...newItem, quantity: Number(newItem.quantity), minStock: Number(newItem.minStock) || 0, toBuy: false }]);
-    setNewItem({ name: '', quantity: '', unit: '', minStock: '' });
+    try {
+      const res = await fetch('/api/grocery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...newItem, quantity: Number(newItem.quantity), minStock: Number(newItem.minStock) || 0 })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add item');
+      setItems([...items, data.item]);
+      setNewItem({ name: '', quantity: '', unit: '', minStock: '', note: '' });
+    } catch (err) {
+      setItemsError(err.message);
+    }
   };
 
   // Edit grocery item
@@ -30,18 +78,51 @@ export default function GroceryPage() {
     setEditIndex(idx);
     setEditItem(items[idx]);
   };
-  const handleSaveEdit = () => {
-    const updated = [...items];
-    updated[editIndex] = { ...editItem, quantity: Number(editItem.quantity), minStock: Number(editItem.minStock) || 0 };
-    setItems(updated);
-    setEditIndex(null);
-    setEditItem({});
+  const handleSaveEdit = async () => {
+    try {
+      const res = await fetch(`/api/grocery?id=${editItem._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...editItem, quantity: Number(editItem.quantity), minStock: Number(editItem.minStock) || 0 })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update item');
+      const updated = [...items];
+      updated[editIndex] = data.item;
+      setItems(updated);
+      setEditIndex(null);
+      setEditItem({});
+    } catch (err) {
+      setItemsError(err.message);
+    }
   };
-  const handleDeleteItem = (idx) => {
-    setItems(items.filter((_, i) => i !== idx));
+  const handleDeleteItem = async (idx) => {
+    const id = items[idx]._id;
+    try {
+      const res = await fetch(`/api/grocery?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete item');
+      setItems(items.filter((_, i) => i !== idx));
+    } catch (err) {
+      setItemsError(err.message);
+    }
   };
-  const handleToggleToBuy = (idx) => {
-    setItems(items.map((item, i) => i === idx ? { ...item, toBuy: !item.toBuy } : item));
+  const handleToggleToBuy = async (idx) => {
+    const item = items[idx];
+    try {
+      const res = await fetch(`/api/grocery?id=${item._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...item, toBuy: !item.toBuy })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update item');
+      const updated = [...items];
+      updated[idx] = data.item;
+      setItems(updated);
+    } catch (err) {
+      setItemsError(err.message);
+    }
   };
 
   // Add grocery used in Sabha
@@ -54,18 +135,44 @@ export default function GroceryPage() {
     setSabhaGrocery({ name: '', quantity: '', unit: '' });
   };
   // Add Sabha record
-  const handleAddSabha = () => {
+  const handleAddSabha = async () => {
     if (!newSabha.date || !newSabha.menu) return;
-    setSabhaRecords([...sabhaRecords, newSabha]);
-    // Optionally deduct used groceries from stock
-    setItems(items.map(item => {
-      const used = (newSabha.groceriesUsed || []).find(g => g.name === item.name);
-      if (used) {
-        return { ...item, quantity: Math.max(0, item.quantity - used.quantity) };
-      }
-      return item;
-    }));
-    setNewSabha({ date: '', menu: '', groceriesUsed: [] });
+    try {
+      const res = await fetch('/api/sabha-grocery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSabha)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to add sabha record');
+      setSabhaRecords([data.record, ...sabhaRecords]);
+      // Optionally deduct used groceries from stock
+      setItems(items.map(item => {
+        const used = (newSabha.groceriesUsed || []).find(g => g.name === item.name);
+        if (used) {
+          return { ...item, quantity: Math.max(0, item.quantity - used.quantity) };
+        }
+        return item;
+      }));
+      setNewSabha({ date: '', menu: '', groceriesUsed: [] });
+    } catch (err) {
+      setSabhaError(err.message);
+    }
+  };
+
+  // Delete Sabha record
+  const handleDeleteSabha = async (id) => {
+    setSabhaDeleteLoading(id);
+    try {
+      const res = await fetch(`/api/sabha-grocery?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete sabha record');
+      setSabhaRecords(sabhaRecords.filter((rec) => rec._id !== id));
+    } catch (err) {
+      setSabhaError(err.message);
+    } finally {
+      setSabhaDeleteLoading(null);
+    }
   };
 
   // Shopping list: items marked toBuy or below minStock
@@ -84,54 +191,86 @@ export default function GroceryPage() {
             <Card className="mb-4">
               <Card.Header>Current Stock</Card.Header>
               <Card.Body>
-                <Table bordered responsive hover className="align-middle">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Quantity</th>
-                      <th>Unit</th>
-                      <th>Min Stock</th>
-                      <th>To Buy</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.length === 0 && (
-                      <tr><td colSpan={6} className="text-center text-muted">No items in stock.</td></tr>
-                    )}
-                    {items.map((item, idx) => (
-                      <tr key={idx}>
-                        <td>{editIndex === idx ? <Form.Control size="sm" value={editItem.name} onChange={e => setEditItem({ ...editItem, name: e.target.value })} /> : item.name}</td>
-                        <td>{editIndex === idx ? <Form.Control size="sm" type="number" value={editItem.quantity} onChange={e => setEditItem({ ...editItem, quantity: e.target.value })} /> : item.quantity}</td>
-                        <td>{editIndex === idx ? <Form.Control size="sm" value={editItem.unit} onChange={e => setEditItem({ ...editItem, unit: e.target.value })} /> : item.unit}</td>
-                        <td>{editIndex === idx ? <Form.Control size="sm" type="number" value={editItem.minStock} onChange={e => setEditItem({ ...editItem, minStock: e.target.value })} /> : item.minStock}</td>
-                        <td>
-                          <Form.Check type="checkbox" checked={item.toBuy} onChange={() => handleToggleToBuy(idx)} disabled={editIndex === idx} />
-                        </td>
-                        <td>
-                          {editIndex === idx ? (
-                            <>
-                              <Button size="sm" variant="success" className="me-2" onClick={handleSaveEdit}>Save</Button>
-                              <Button size="sm" variant="secondary" onClick={() => setEditIndex(null)}>Cancel</Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button size="sm" variant="primary" className="me-2" onClick={() => handleEditItem(idx)}>Edit</Button>
-                              <Button size="sm" variant="danger" onClick={() => handleDeleteItem(idx)}>Delete</Button>
-                            </>
-                          )}
-                        </td>
+                {itemsLoading ? (
+                  <div className="text-center py-4"><Spinner animation="border" /></div>
+                ) : itemsError ? (
+                  <Alert variant="danger">{itemsError}</Alert>
+                ) : (
+                  <Table bordered responsive hover className="align-middle">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Quantity</th>
+                        <th>Unit</th>
+                        <th>Min Stock</th>
+                        <th>Note</th>
+                        <th>Status</th>
+                        <th>To Buy</th>
+                        <th>Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </Table>
+                    </thead>
+                    <tbody>
+                      {items.length === 0 && (
+                        <tr><td colSpan={7} className="text-center text-muted">No items in stock.</td></tr>
+                      )}
+                      {items.map((item, idx) => {
+                        const isLow = item.minStock && item.quantity <= item.minStock;
+                        return (
+                          <tr key={item._id} className={isLow ? 'table-warning' : ''}>
+                            <td>{editIndex === idx ? <Form.Control size="sm" value={editItem.name} onChange={e => setEditItem({ ...editItem, name: e.target.value })} /> : item.name}</td>
+                            <td>{editIndex === idx ? <Form.Control size="sm" type="number" value={editItem.quantity} onChange={e => setEditItem({ ...editItem, quantity: e.target.value })} /> : item.quantity}</td>
+                            <td>{editIndex === idx ? (
+                              <Form.Select size="sm" value={editItem.unit} onChange={e => setEditItem({ ...editItem, unit: e.target.value })}>
+                                <option value="">Select</option>
+                                {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                              </Form.Select>
+                            ) : item.unit}</td>
+                            <td>{editIndex === idx ? <Form.Control size="sm" type="number" value={editItem.minStock} onChange={e => setEditItem({ ...editItem, minStock: e.target.value })} /> : item.minStock}</td>
+                            <td>{editIndex === idx ? <Form.Control size="sm" value={editItem.note || ''} onChange={e => setEditItem({ ...editItem, note: e.target.value })} placeholder="e.g. half a 10lb bag left" /> : (item.note || '')}</td>
+                            <td>
+                              {item.toBuy ? (
+                                <span className="badge bg-danger">To Buy</span>
+                              ) : isLow ? (
+                                <span className="badge bg-warning text-dark">Low</span>
+                              ) : (
+                                <span className="badge bg-success">In Stock</span>
+                              )}
+                            </td>
+                            <td>
+                              <Form.Check type="checkbox" checked={item.toBuy} onChange={() => handleToggleToBuy(idx)} disabled={editIndex === idx} title="Mark as To Buy" />
+                            </td>
+                            <td>
+                              {editIndex === idx ? (
+                                <>
+                                  <Button size="sm" variant="success" className="me-2" onClick={handleSaveEdit} title="Save"><i className="fas fa-check"></i></Button>
+                                  <Button size="sm" variant="secondary" onClick={() => setEditIndex(null)} title="Cancel"><i className="fas fa-times"></i></Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button size="sm" variant="primary" className="me-2" onClick={() => handleEditItem(idx)} title="Edit"><i className="fas fa-edit"></i></Button>
+                                  <Button size="sm" variant="danger" onClick={() => handleDeleteItem(idx)} title="Delete"><i className="fas fa-trash"></i></Button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                )}
                 <h6 className="mt-4">Add New Item</h6>
                 <Row className="g-2 align-items-end">
                   <Col md={3}><Form.Control size="sm" placeholder="Name" value={newItem.name} onChange={e => setNewItem({ ...newItem, name: e.target.value })} /></Col>
                   <Col md={2}><Form.Control size="sm" type="number" placeholder="Quantity" value={newItem.quantity} onChange={e => setNewItem({ ...newItem, quantity: e.target.value })} /></Col>
-                  <Col md={2}><Form.Control size="sm" placeholder="Unit" value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })} /></Col>
+                  <Col md={2}>
+                    <Form.Select size="sm" value={newItem.unit} onChange={e => setNewItem({ ...newItem, unit: e.target.value })}>
+                      <option value="">Unit</option>
+                      {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </Form.Select>
+                  </Col>
                   <Col md={2}><Form.Control size="sm" type="number" placeholder="Min Stock" value={newItem.minStock} onChange={e => setNewItem({ ...newItem, minStock: e.target.value })} /></Col>
-                  <Col md={2}><Button size="sm" variant="success" onClick={handleAddItem}>Add</Button></Col>
+                  <Col md={3}><Form.Control size="sm" placeholder="Note (optional)" value={newItem.note || ''} onChange={e => setNewItem({ ...newItem, note: e.target.value })} /></Col>
+                  <Col md={2}><Button size="sm" variant="success" onClick={handleAddItem}><i className="fas fa-plus me-1"></i>Add</Button></Col>
                 </Row>
               </Card.Body>
             </Card>
@@ -140,7 +279,11 @@ export default function GroceryPage() {
             <Card>
               <Card.Header>Shopping List</Card.Header>
               <Card.Body>
-                {shoppingList.length === 0 ? (
+                {itemsLoading ? (
+                  <div className="text-center py-4"><Spinner animation="border" /></div>
+                ) : itemsError ? (
+                  <Alert variant="danger">{itemsError}</Alert>
+                ) : shoppingList.length === 0 ? (
                   <Alert variant="info">No items to buy. All stocks are sufficient!</Alert>
                 ) : (
                   <Table bordered responsive hover className="align-middle">
@@ -154,7 +297,7 @@ export default function GroceryPage() {
                     </thead>
                     <tbody>
                       {shoppingList.map((item, idx) => (
-                        <tr key={idx}>
+                        <tr key={item._id}>
                           <td>{item.name}</td>
                           <td>{item.quantity}</td>
                           <td>{item.unit}</td>
@@ -193,7 +336,11 @@ export default function GroceryPage() {
                 <Button size="sm" variant="success" onClick={handleAddSabha}>Save Sabha Record</Button>
                 <hr />
                 <h6>Sabha History</h6>
-                {sabhaRecords.length === 0 ? (
+                {sabhaLoading ? (
+                  <div className="text-center py-4"><Spinner animation="border" /></div>
+                ) : sabhaError ? (
+                  <Alert variant="danger">{sabhaError}</Alert>
+                ) : sabhaRecords.length === 0 ? (
                   <Alert variant="info">No Sabha records yet.</Alert>
                 ) : (
                   <Table bordered responsive hover className="align-middle">
@@ -202,12 +349,26 @@ export default function GroceryPage() {
                         <th>Date</th>
                         <th>Menu</th>
                         <th>Groceries Used</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {sabhaRecords.map((rec, idx) => (
-                        <tr key={idx}>
-                          <td>{rec.date}</td>
+                      {sabhaRecords.map((rec) => (
+                        <tr key={rec._id}>
+                          <td>{rec.date
+                            ? (() => {
+                                const d = new Date(rec.date);
+                                if (isNaN(d.getTime())) {
+                                  return rec.date.slice(0, 10);
+                                }
+                                return d.toLocaleDateString('en-CA', {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric'
+                                });
+                              })()
+                            : ''}
+                          </td>
                           <td>{rec.menu}</td>
                           <td>
                             <ul className="mb-0">
@@ -215,6 +376,21 @@ export default function GroceryPage() {
                                 <li key={i}>{g.name} - {g.quantity} {g.unit}</li>
                               ))}
                             </ul>
+                          </td>
+                          <td>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              title="Delete"
+                              onClick={() => handleDeleteSabha(rec._id)}
+                              disabled={sabhaDeleteLoading === rec._id}
+                            >
+                              {sabhaDeleteLoading === rec._id ? (
+                                <Spinner animation="border" size="sm" />
+                              ) : (
+                                <i className="fas fa-trash"></i>
+                              )}
+                            </Button>
                           </td>
                         </tr>
                       ))}
